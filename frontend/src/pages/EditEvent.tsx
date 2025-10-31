@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+// src/pages/EditEvent.tsx
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +22,35 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/api";
 
-export default function CreateEvent() {
+interface Event {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  start_time: string;
+  end_time: string;
+  is_public: boolean;
+  organizer: string;
+  organizer_id: number;
+  can_edit: boolean;
+}
+
+const fetchEvent = async (id: string): Promise<Event> => {
+  const response = await api.get(`/events/${id}/`);
+  return response.data;
+};
+
+const updateEvent = async (id: string, eventData: any): Promise<Event> => {
+  const response = await api.patch(`/events/${id}/`, eventData);
+  return response.data;
+};
+
+export default function EditEvent() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { isAuthenticated, user } = useAuth();
+  const queryClient = useQueryClient();
+  
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -35,12 +62,57 @@ export default function CreateEvent() {
     isPublic: true,
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const {
+    data: event,
+    isLoading,
+    error
+  } = useQuery({
+    queryKey: ['event', id],
+    queryFn: () => fetchEvent(id!),
+    enabled: !!id,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (eventData: any) => updateEvent(id!, eventData),
+    onSuccess: () => {
+      toast.success("Event updated successfully!");
+      queryClient.invalidateQueries({ queryKey: ['event', id] });
+      navigate(`/events/${id}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update event");
+    }
+  });
+
+  useEffect(() => {
+    if (event) {
+      const startDateTime = new Date(event.start_time);
+      const endDateTime = new Date(event.end_time);
+      
+      setFormData({
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        startDate: startDateTime,
+        startTime: format(startDateTime, "HH:mm"),
+        endDate: endDateTime,
+        endTime: format(endDateTime, "HH:mm"),
+        isPublic: event.is_public,
+      });
+    }
+  }, [event]);
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isAuthenticated) {
-      toast.error("Please login to create an event");
+      toast.error("Please login to edit events");
       navigate("/login");
+      return;
+    }
+
+    if (!event?.can_edit) {
+      toast.error("You don't have permission to edit this event");
       return;
     }
 
@@ -54,7 +126,6 @@ export default function CreateEvent() {
       return;
     }
 
-    // Validate end date is after start date
     const startDateTime = new Date(`${formData.startDate.toISOString().split('T')[0]}T${formData.startTime}`);
     const endDateTime = new Date(`${formData.endDate.toISOString().split('T')[0]}T${formData.endTime}`);
 
@@ -63,43 +134,89 @@ export default function CreateEvent() {
       return;
     }
 
-    setLoading(true);
-    try {
-      const eventData = {
-        title: formData.title,
-        description: formData.description,
-        location: formData.location,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-        is_public: formData.isPublic,
-      };
+    const eventData = {
+      title: formData.title,
+      description: formData.description,
+      location: formData.location,
+      start_time: startDateTime.toISOString(),
+      end_time: endDateTime.toISOString(),
+      is_public: formData.isPublic,
+    };
 
-      await api.post('/events/', eventData);
-      toast.success("Event created successfully!");
-      navigate("/dashboard");
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.detail ||
-                          "Failed to create event";
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    updateMutation.mutate(eventData);
   };
+
+  if (!isAuthenticated) {
+    navigate('/login');
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-muted rounded w-1/4"></div>
+            <div className="h-64 bg-muted rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !event) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 text-center">
+          <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
+          <p className="text-muted-foreground mb-4">
+            The event you're trying to edit doesn't exist or has been removed.
+          </p>
+          <Button onClick={() => navigate("/dashboard")}>
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event.can_edit) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 text-center">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p className="text-muted-foreground mb-4">
+            You don't have permission to edit this event.
+          </p>
+          <Button onClick={() => navigate(`/events/${id}`)}>
+            Back to Event
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
       <div className="container mx-auto px-4 py-8 max-w-3xl">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6" disabled={loading}>
-          <ArrowLeft className="h-4 w-4" />
-          Back
+        <Button 
+          variant="ghost" 
+          onClick={() => navigate(`/events/${id}`)} 
+          className="mb-6"
+          disabled={updateMutation.isPending}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Event
         </Button>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-3xl">Create New Event</CardTitle>
+            <CardTitle className="text-3xl">Edit Event</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -115,7 +232,7 @@ export default function CreateEvent() {
                     setFormData({ ...formData, title: e.target.value })
                   }
                   required
-                  disabled={loading}
+                  disabled={updateMutation.isPending}
                 />
               </div>
 
@@ -132,7 +249,7 @@ export default function CreateEvent() {
                   }
                   rows={5}
                   required
-                  disabled={loading}
+                  disabled={updateMutation.isPending}
                 />
               </div>
 
@@ -148,7 +265,7 @@ export default function CreateEvent() {
                     setFormData({ ...formData, location: e.target.value })
                   }
                   required
-                  disabled={loading}
+                  disabled={updateMutation.isPending}
                 />
               </div>
 
@@ -165,7 +282,7 @@ export default function CreateEvent() {
                           "w-full justify-start text-left font-normal",
                           !formData.startDate && "text-muted-foreground"
                         )}
-                        disabled={loading}
+                        disabled={updateMutation.isPending}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.startDate ? (
@@ -183,8 +300,6 @@ export default function CreateEvent() {
                           setFormData({ ...formData, startDate: date })
                         }
                         initialFocus
-                        className="pointer-events-auto"
-                        disabled={(date) => date < new Date()}
                       />
                     </PopoverContent>
                   </Popover>
@@ -202,7 +317,7 @@ export default function CreateEvent() {
                       setFormData({ ...formData, startTime: e.target.value })
                     }
                     required
-                    disabled={loading}
+                    disabled={updateMutation.isPending}
                   />
                 </div>
 
@@ -218,7 +333,7 @@ export default function CreateEvent() {
                           "w-full justify-start text-left font-normal",
                           !formData.endDate && "text-muted-foreground"
                         )}
-                        disabled={loading}
+                        disabled={updateMutation.isPending}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.endDate ? (
@@ -236,8 +351,6 @@ export default function CreateEvent() {
                           setFormData({ ...formData, endDate: date })
                         }
                         initialFocus
-                        className="pointer-events-auto"
-                        disabled={(date) => date < new Date()}
                       />
                     </PopoverContent>
                   </Popover>
@@ -255,7 +368,7 @@ export default function CreateEvent() {
                       setFormData({ ...formData, endTime: e.target.value })
                     }
                     required
-                    disabled={loading}
+                    disabled={updateMutation.isPending}
                   />
                 </div>
               </div>
@@ -273,7 +386,7 @@ export default function CreateEvent() {
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, isPublic: checked })
                   }
-                  disabled={loading}
+                  disabled={updateMutation.isPending}
                 />
               </div>
 
@@ -281,14 +394,18 @@ export default function CreateEvent() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate(-1)}
+                  onClick={() => navigate(`/events/${id}`)}
                   className="flex-1"
-                  disabled={loading}
+                  disabled={updateMutation.isPending}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="flex-1" disabled={loading}>
-                  {loading ? "Creating..." : "Create Event"}
+                <Button 
+                  type="submit" 
+                  className="flex-1"
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? "Updating..." : "Update Event"}
                 </Button>
               </div>
             </form>

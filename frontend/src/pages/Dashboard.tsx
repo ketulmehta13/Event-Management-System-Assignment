@@ -1,72 +1,136 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/Navbar";
 import { EventCard } from "@/components/EventCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
+import { toast } from "sonner";
 
-// Mock data
-const myEvents = [
-  {
-    id: 1,
-    title: "Summer Music Festival 2025",
-    description: "Join us for an unforgettable night of live music featuring top artists.",
-    location: "Central Park, New York",
-    start_time: "2025-07-15T18:00:00",
-    end_time: "2025-07-15T23:00:00",
-    is_public: true,
-    organizer: "John Doe",
-    attendee_count: 250,
-  },
-];
+interface Event {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  start_time: string;
+  end_time: string;
+  is_public: boolean;
+  organizer: string;
+  organizer_id: number;
+  attendee_count: number;
+  user_rsvp: string | null;
+  can_edit: boolean;
+}
 
-const attendingEvents = [
-  {
-    id: 2,
-    title: "Tech Conference 2025",
-    description: "Discover the latest in technology and innovation.",
-    location: "Convention Center, San Francisco",
-    start_time: "2025-08-20T09:00:00",
-    end_time: "2025-08-20T17:00:00",
-    is_public: true,
-    organizer: "Tech Innovators",
-    attendee_count: 500,
-  },
-  {
-    id: 3,
-    title: "Food & Wine Tasting",
-    description: "Experience exquisite culinary delights.",
-    location: "Downtown Restaurant, Chicago",
-    start_time: "2025-09-10T19:00:00",
-    end_time: "2025-09-10T22:00:00",
-    is_public: true,
-    organizer: "Culinary Guild",
-    attendee_count: 80,
-  },
-];
+interface DashboardData {
+  organized_events: Event[];
+  rsvped_events: Event[];
+  rsvp_count: number;
+  organized_count: number;
+}
+
+const fetchDashboardData = async (): Promise<DashboardData> => {
+  const response = await api.get('/dashboard/');
+  return response.data;
+};
 
 export default function Dashboard() {
-  const [isAuthenticated] = useState(false);
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+
+  const {
+    data: dashboardData,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: fetchDashboardData,
+    enabled: isAuthenticated,
+    retry: 2,
+  });
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated) {
+    navigate('/login');
+    return null;
+  }
+
+  const handleRSVP = async (eventId: number, status: string) => {
+    try {
+      await api.post(`/events/${eventId}/rsvp/`, { status });
+      toast.success(`RSVP updated to ${status}`);
+      refetch();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to update RSVP");
+    }
+  };
+
+  if (error) {
+    toast.error("Failed to load dashboard data");
+  }
+
+  const myEvents = dashboardData?.organized_events || [];
+  const attendingEvents = dashboardData?.rsvped_events || [];
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar isAuthenticated={isAuthenticated} />
+      <Navbar />
 
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold mb-2">My Dashboard</h1>
             <p className="text-muted-foreground">
-              Manage your events and track your RSVPs
+              Welcome back, {user?.profile?.full_name || user?.username}! Manage your events and track your RSVPs
             </p>
           </div>
           <Link to="/create-event">
             <Button variant="default" size="lg">
-              <PlusCircle className="h-5 w-5" />
+              <PlusCircle className="h-5 w-5 mr-2" />
               Create Event
             </Button>
           </Link>
+        </div>
+
+        {/* Stats Section */}
+        <div className="grid gap-4 md:grid-cols-3 mb-8">
+          <div className="p-6 border border-border rounded-lg">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-8 w-8 text-primary" />
+              <div>
+                <p className="text-2xl font-bold">
+                  {isLoading ? "..." : myEvents.length}
+                </p>
+                <p className="text-sm text-muted-foreground">Events Organized</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 border border-border rounded-lg">
+            <div className="flex items-center gap-3">
+              <PlusCircle className="h-8 w-8 text-green-500" />
+              <div>
+                <p className="text-2xl font-bold">
+                  {isLoading ? "..." : attendingEvents.length}
+                </p>
+                <p className="text-sm text-muted-foreground">Events Attending</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 border border-border rounded-lg">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-8 w-8 text-blue-500" />
+              <div>
+                <p className="text-2xl font-bold">
+                  {isLoading ? "..." : myEvents.reduce((sum, event) => sum + event.attendee_count, 0)}
+                </p>
+                <p className="text-sm text-muted-foreground">Total Attendees</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <Tabs defaultValue="organized" className="space-y-6">
@@ -79,13 +143,25 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <Calendar className="h-5 w-5" />
               <span>
-                {myEvents.length} {myEvents.length === 1 ? "event" : "events"}
+                {isLoading ? "Loading..." : `${myEvents.length} ${myEvents.length === 1 ? "event" : "events"}`}
               </span>
             </div>
-            {myEvents.length > 0 ? (
+            
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-80 bg-muted animate-pulse rounded-lg"></div>
+                ))}
+              </div>
+            ) : myEvents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {myEvents.map((event) => (
-                  <EventCard key={event.id} event={event} />
+                  <EventCard 
+                    key={event.id} 
+                    event={event} 
+                    onRSVP={handleRSVP}
+                    showEditOptions={true}
+                  />
                 ))}
               </div>
             ) : (
@@ -97,7 +173,7 @@ export default function Dashboard() {
                 </p>
                 <Link to="/create-event">
                   <Button>
-                    <PlusCircle className="h-4 w-4" />
+                    <PlusCircle className="h-4 w-4 mr-2" />
                     Create Event
                   </Button>
                 </Link>
@@ -109,18 +185,45 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <Calendar className="h-5 w-5" />
               <span>
-                {attendingEvents.length}{" "}
-                {attendingEvents.length === 1 ? "event" : "events"}
+                {isLoading ? "Loading..." : `${attendingEvents.length} ${attendingEvents.length === 1 ? "event" : "events"}`}
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {attendingEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
-              ))}
-            </div>
+            
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-80 bg-muted animate-pulse rounded-lg"></div>
+                ))}
+              </div>
+            ) : attendingEvents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {attendingEvents.map((event) => (
+                  <EventCard 
+                    key={event.id} 
+                    event={event} 
+                    onRSVP={handleRSVP}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 border-2 border-dashed border-border rounded-lg">
+                <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No events in your calendar</h3>
+                <p className="text-muted-foreground mb-4">
+                  Browse events and RSVP to see them here
+                </p>
+                <Link to="/">
+                  <Button>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Browse Events
+                  </Button>
+                </Link>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
     </div>
   );
 }
+  

@@ -6,9 +6,11 @@ import { format } from "date-fns";
 interface Review {
   id: number;
   user: string;
+  user_full_name?: string;
   rating: number;
   comment: string;
   created_at: string;
+  can_edit?: boolean;
 }
 
 interface ReviewCardProps {
@@ -25,18 +27,20 @@ export const ReviewCard = ({ review }: ReviewCardProps) => {
       .slice(0, 2);
   };
 
+  const displayName = review.user_full_name || review.user;
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
         <div className="flex items-start gap-4">
           <Avatar className="h-10 w-10 border-2 border-primary/20">
             <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground">
-              {getInitials(review.user)}
+              {getInitials(displayName)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 space-y-1">
             <div className="flex items-center justify-between">
-              <h4 className="font-semibold">{review.user}</h4>
+              <h4 className="font-semibold">{displayName}</h4>
               <span className="text-xs text-muted-foreground">
                 {format(new Date(review.created_at), "PPP")}
               </span>

@@ -1,4 +1,4 @@
-import { Calendar, MapPin, Users, Clock } from "lucide-react";
+import { Calendar, MapPin, Users, Clock, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,64 +14,155 @@ interface Event {
   end_time: string;
   is_public: boolean;
   organizer: string;
+  organizer_id?: number;
   attendee_count?: number;
+  user_rsvp?: string | null;
+  can_edit?: boolean;
 }
 
 interface EventCardProps {
   event: Event;
+  onRSVP?: (eventId: number, status: string) => Promise<void>;
+  showEditOptions?: boolean;
 }
 
-export const EventCard = ({ event }: EventCardProps) => {
+export const EventCard = ({ event, onRSVP, showEditOptions = false }: EventCardProps) => {
   const startDate = new Date(event.start_time);
   const endDate = new Date(event.end_time);
 
+  const handleRSVP = async (status: string) => {
+    if (onRSVP) {
+      await onRSVP(event.id, status);
+    }
+  };
+
+  const getRSVPButtonVariant = (status: string) => {
+    return event.user_rsvp === status ? "default" : "outline";
+  };
+
+  const getRSVPStatusText = (status: string) => {
+    switch (status) {
+      case 'going':
+        return 'Going';
+      case 'maybe':
+        return 'Maybe';
+      case 'not_going':
+        return 'Not Going';
+      default:
+        return status;
+    }
+  };
+
   return (
-    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 bg-gradient-card border-border">
-      <CardHeader className="p-0">
-        <div className="h-48 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-t from-card/90 to-transparent"></div>
-          <Calendar className="h-24 w-24 text-primary/30 absolute" />
-          <div className="absolute bottom-4 left-4 right-4 z-10">
-            <h3 className="text-xl font-bold text-foreground line-clamp-2">
+    <Card className="h-full flex flex-col">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-lg mb-2 line-clamp-2">
               {event.title}
             </h3>
+            <div className="flex items-center gap-2">
+              {!event.is_public && (
+                <Badge variant="secondary" className="text-xs">
+                  Private
+                </Badge>
+              )}
+              {event.user_rsvp && (
+                <Badge variant="outline" className="text-xs">
+                  {getRSVPStatusText(event.user_rsvp)}
+                </Badge>
+              )}
+            </div>
           </div>
-          {!event.is_public && (
-            <Badge className="absolute top-4 right-4 bg-secondary">Private</Badge>
+          {showEditOptions && event.can_edit && (
+            <div className="flex gap-1 ml-2">
+              <Link to={`/events/${event.id}/edit`}>
+                <Button variant="ghost" size="sm">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to delete this event?')) {
+                    console.log('Delete event', event.id);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           )}
         </div>
       </CardHeader>
-      <CardContent className="p-6 space-y-4">
-        <p className="text-muted-foreground line-clamp-2 min-h-[3rem]">
+      
+      <CardContent className="flex-1">
+        <p className="text-muted-foreground text-sm mb-4 line-clamp-3">
           {event.description}
         </p>
-        <div className="space-y-2">
+        
+        <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm">
-            <Calendar className="h-4 w-4 text-primary" />
+            <Calendar className="h-4 w-4 text-muted-foreground" />
             <span>{format(startDate, "PPP")}</span>
           </div>
+          
           <div className="flex items-center gap-2 text-sm">
-            <Clock className="h-4 w-4 text-primary" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
             <span>
               {format(startDate, "p")} - {format(endDate, "p")}
             </span>
           </div>
+          
           <div className="flex items-center gap-2 text-sm">
-            <MapPin className="h-4 w-4 text-primary" />
+            <MapPin className="h-4 w-4 text-muted-foreground" />
             <span className="line-clamp-1">{event.location}</span>
           </div>
+          
           <div className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4 text-primary" />
+            <Users className="h-4 w-4 text-muted-foreground" />
             <span>{event.attendee_count || 0} attendees</span>
           </div>
         </div>
-        <div className="text-sm text-muted-foreground">
-          Organized by <span className="font-semibold text-foreground">{event.organizer}</span>
-        </div>
       </CardContent>
-      <CardFooter className="p-6 pt-0">
+      
+      <CardFooter className="flex flex-col gap-3">
+        <div className="text-xs text-muted-foreground w-full">
+          Organized by {event.organizer}
+        </div>
+        
+        {onRSVP && (
+          <div className="flex gap-2 w-full">
+            <Button
+              size="sm"
+              variant={getRSVPButtonVariant('going')}
+              onClick={() => handleRSVP('going')}
+              className="flex-1"
+            >
+              Going
+            </Button>
+            <Button
+              size="sm"
+              variant={getRSVPButtonVariant('maybe')}
+              onClick={() => handleRSVP('maybe')}
+              className="flex-1"
+            >
+              Maybe
+            </Button>
+            <Button
+              size="sm"
+              variant={getRSVPButtonVariant('not_going')}
+              onClick={() => handleRSVP('not_going')}
+              className="flex-1"
+            >
+              No
+            </Button>
+          </div>
+        )}
+        
         <Link to={`/events/${event.id}`} className="w-full">
-          <Button variant="default" className="w-full">
+          <Button variant="outline" size="sm" className="w-full">
             View Details
           </Button>
         </Link>

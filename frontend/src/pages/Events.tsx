@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/Navbar";
 import { EventCard } from "@/components/EventCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Calendar } from "lucide-react";
+import { Search, Filter, Calendar, RefreshCw } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,103 +12,162 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
+import { toast } from "sonner";
 
-// Mock data - will be replaced with API calls
-const mockEvents = [
-  {
-    id: 1,
-    title: "Summer Music Festival 2025",
-    description: "Join us for an unforgettable night of live music featuring top artists from around the world.",
-    location: "Central Park, New York",
-    start_time: "2025-07-15T18:00:00",
-    end_time: "2025-07-15T23:00:00",
-    is_public: true,
-    organizer: "Music Events Co.",
-    attendee_count: 250,
-  },
-  {
-    id: 2,
-    title: "Tech Conference 2025",
-    description: "Discover the latest in technology and innovation. Network with industry leaders and experts.",
-    location: "Convention Center, San Francisco",
-    start_time: "2025-08-20T09:00:00",
-    end_time: "2025-08-20T17:00:00",
-    is_public: true,
-    organizer: "Tech Innovators",
-    attendee_count: 500,
-  },
-  {
-    id: 3,
-    title: "Food & Wine Tasting",
-    description: "Experience exquisite culinary delights paired with fine wines from local vineyards.",
-    location: "Downtown Restaurant, Chicago",
-    start_time: "2025-09-10T19:00:00",
-    end_time: "2025-09-10T22:00:00",
-    is_public: true,
-    organizer: "Culinary Guild",
-    attendee_count: 80,
-  },
-  {
-    id: 4,
-    title: "Marathon Running Event",
-    description: "Challenge yourself in our annual city marathon. All skill levels welcome!",
-    location: "City Stadium, Boston",
-    start_time: "2025-10-05T07:00:00",
-    end_time: "2025-10-05T14:00:00",
-    is_public: true,
-    organizer: "Runners Association",
-    attendee_count: 1200,
-  },
-  {
-    id: 5,
-    title: "Art Gallery Opening",
-    description: "Exclusive showcase of contemporary art from emerging artists. Wine and hors d'oeuvres included.",
-    location: "Modern Art Gallery, Los Angeles",
-    start_time: "2025-11-12T18:30:00",
-    end_time: "2025-11-12T21:00:00",
-    is_public: false,
-    organizer: "Art Collective",
-    attendee_count: 45,
-  },
-  {
-    id: 6,
-    title: "Startup Networking Mixer",
-    description: "Meet fellow entrepreneurs and investors. Share ideas and build connections.",
-    location: "Co-working Space, Austin",
-    start_time: "2025-12-03T17:00:00",
-    end_time: "2025-12-03T20:00:00",
-    is_public: true,
-    organizer: "Startup Hub",
-    attendee_count: 150,
-  },
-];
+interface Event {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  start_time: string;
+  end_time: string;
+  is_public: boolean;
+  organizer: string;
+  organizer_id: number;
+  attendee_count: number;
+  user_rsvp: string | null;
+  can_edit: boolean;
+}
+
+interface ApiResponse {
+  count?: number;
+  next?: string;
+  previous?: string;
+  results?: Event[];
+}
+
+const fetchEvents = async (search?: string, location?: string): Promise<Event[]> => {
+  try {
+    const params = new URLSearchParams();
+    if (search && search.trim()) {
+      params.append('search', search.trim());
+    }
+    if (location && location !== 'all') {
+      params.append('location', location);
+    }
+    
+    console.log('Fetching events with params:', params.toString());
+    console.log('API URL:', `/events/?${params.toString()}`);
+    
+    const response = await api.get(`/events/?${params.toString()}`);
+    console.log('Events API response:', response.data);
+    
+    // Handle paginated response or direct array
+    let events: Event[] = [];
+    
+    if (response.data && typeof response.data === 'object') {
+      if (Array.isArray(response.data)) {
+        events = response.data;
+      } else if (response.data.results && Array.isArray(response.data.results)) {
+        events = response.data.results;
+      } else if (response.data.count !== undefined) {
+        // Paginated response without results array (empty)
+        events = [];
+      } else {
+        console.error('Unexpected response format:', response.data);
+        events = [];
+      }
+    } else {
+      console.error('Invalid response data:', response.data);
+      events = [];
+    }
+    
+    console.log('Processed events:', events);
+    return events;
+  } catch (error: any) {
+    console.error('Error fetching events:', error);
+    console.error('Error response:', error.response?.data);
+    console.error('Error status:', error.response?.status);
+    throw error;
+  }
+};
 
 export default function Events() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterLocation, setFilterLocation] = useState("all");
-  const [isAuthenticated] = useState(false); // This would come from auth context
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { isAuthenticated } = useAuth();
 
-  const filteredEvents = mockEvents.filter((event) => {
-    const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesLocation = filterLocation === "all" || event.location.includes(filterLocation);
-    return matchesSearch && matchesLocation;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const {
+    data: events = [],
+    isLoading,
+    error,
+    refetch,
+    isRefetching
+  } = useQuery({
+    queryKey: ['events', debouncedSearch, filterLocation],
+    queryFn: () => fetchEvents(debouncedSearch || undefined, filterLocation),
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    retry: (failureCount, error: any) => {
+      // Only retry on network errors, not 404/403 etc
+      if (error.response?.status >= 400 && error.response?.status < 500) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    retryDelay: 1000,
   });
+
+  const handleRSVP = async (eventId: number, status: string) => {
+    if (!isAuthenticated) {
+      toast.error("Please login to RSVP");
+      return;
+    }
+
+    try {
+      const response = await api.post(`/events/${eventId}/rsvp/`, { status });
+      toast.success(response.data.message || `RSVP updated to ${status}`);
+      
+      // Refetch events to get updated data
+      refetch();
+    } catch (error: any) {
+      console.error('RSVP error:', error);
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          "Failed to update RSVP";
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleRefresh = () => {
+    refetch();
+    toast.success("Events refreshed!");
+  };
+
+  // Log for debugging
+  useEffect(() => {
+    console.log('Events component state:');
+    console.log('- Events data:', events);
+    console.log('- Events length:', events.length);
+    console.log('- Is loading:', isLoading);
+    console.log('- Is refetching:', isRefetching);
+    console.log('- Error:', error);
+    console.log('- Search query:', debouncedSearch);
+    console.log('- Filter location:', filterLocation);
+    console.log('- Is authenticated:', isAuthenticated);
+  }, [events, isLoading, isRefetching, error, debouncedSearch, filterLocation, isAuthenticated]);
+
+  if (error) {
+    console.error("Events error:", error);
+    toast.error("Failed to load events. Please try refreshing.");
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar isAuthenticated={isAuthenticated} />
+      <Navbar />
       
-      {/* Hero Section */}
       <section className="relative h-[400px] flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0">
-          <img
-            
-            
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-secondary/80"></div>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-secondary/80"></div>
         <div className="relative z-10 text-center space-y-6 px-4 max-w-4xl">
           <h1 className="text-5xl md:text-6xl font-bold text-white">
             Discover Amazing Events
@@ -116,15 +176,14 @@ export default function Events() {
             Find and join events that match your interests
           </p>
           <div className="flex gap-4 justify-center">
-            <Button variant="hero" size="xl">
-              <Calendar className="h-5 w-5" />
+            <Button variant="default" size="lg">
+              <Calendar className="h-5 w-5 mr-2" />
               Explore Events
             </Button>
           </div>
         </div>
       </section>
 
-      {/* Search and Filter Section */}
       <section className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1">
@@ -156,27 +215,67 @@ export default function Events() {
               </SelectContent>
             </Select>
           </div>
+          <Button 
+            onClick={handleRefresh} 
+            variant="outline"
+            disabled={isRefetching}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
+            {isRefetching ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </div>
       </section>
 
-      {/* Events Grid */}
       <section className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-3xl font-bold">Upcoming Events</h2>
           <span className="text-muted-foreground">
-            {filteredEvents.length} {filteredEvents.length === 1 ? "event" : "events"} found
+            {isLoading ? "Loading..." : `${events.length} ${events.length === 1 ? "event" : "events"} found`}
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </div>
-        {filteredEvents.length === 0 && (
+        
+        {/* Debug information - remove in production */}
+        
+        
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-80 bg-muted animate-pulse rounded-lg"></div>
+            ))}
+          </div>
+        ) : events.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((event) => (
+              <EventCard 
+                key={event.id} 
+                event={event} 
+                onRSVP={handleRSVP}
+              />
+            ))}
+          </div>
+        ) : (
           <div className="text-center py-12">
             <Calendar className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">No events found</h3>
-            <p className="text-muted-foreground">Try adjusting your search or filters</p>
+            <p className="text-muted-foreground mb-4">
+              {error 
+                ? "There was an error loading events. Please check your connection and try again." 
+                : debouncedSearch 
+                  ? `No events match your search "${debouncedSearch}"` 
+                  : "No events are currently available. Create the first event!"}
+            </p>
+            <div className="flex gap-4 justify-center">
+              <Button onClick={handleRefresh} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+              {isAuthenticated && (
+                <Button onClick={() => window.location.href = '/create-event'}>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Create Event
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </section>

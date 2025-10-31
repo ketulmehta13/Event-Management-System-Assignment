@@ -8,19 +8,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface NavbarProps {
-  isAuthenticated?: boolean;
-  onLogout?: () => void;
-}
-
-export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
+export const Navbar = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    if (onLogout) onLogout();
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/");
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
@@ -34,7 +35,6 @@ export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-4">
             <Link to="/">
               <Button variant="ghost">Browse Events</Button>
@@ -43,14 +43,15 @@ export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
               <>
                 <Link to="/create-event">
                   <Button variant="default">
-                    <PlusCircle className="h-4 w-4" />
+                    <PlusCircle className="h-4 w-4 mr-2" />
                     Create Event
                   </Button>
                 </Link>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <User className="h-5 w-5" />
+                    <Button variant="ghost">
+                      <User className="h-4 w-4 mr-2" />
+                      {user?.profile?.full_name || user?.username || "Profile"}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -81,7 +82,6 @@ export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
           <button
             className="md:hidden"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -90,7 +90,6 @@ export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
           </button>
         </div>
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden py-4 space-y-2 border-t border-border">
             <Link to="/" onClick={() => setMobileMenuOpen(false)}>
@@ -102,19 +101,19 @@ export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
               <>
                 <Link to="/create-event" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="default" className="w-full">
-                    <PlusCircle className="h-4 w-4" />
+                    <PlusCircle className="h-4 w-4 mr-2" />
                     Create Event
                   </Button>
                 </Link>
                 <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="ghost" className="w-full justify-start">
-                    <User className="h-4 w-4" />
+                    <User className="h-4 w-4 mr-2" />
                     Profile
                   </Button>
                 </Link>
                 <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="ghost" className="w-full justify-start">
-                    <Calendar className="h-4 w-4" />
+                    <Calendar className="h-4 w-4 mr-2" />
                     My Events
                   </Button>
                 </Link>
@@ -126,7 +125,7 @@ export const Navbar = ({ isAuthenticated = false, onLogout }: NavbarProps) => {
                     handleLogout();
                   }}
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-4 w-4 mr-2" />
                   Logout
                 </Button>
               </>

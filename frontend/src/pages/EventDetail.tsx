@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ReviewCard } from "@/components/ReviewCard";
@@ -25,51 +26,116 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import api from "@/lib/api";
 
-// Mock data
-const mockEvent = {
-  id: 1,
-  title: "Summer Music Festival 2025",
-  description:
-    "Join us for an unforgettable night of live music featuring top artists from around the world. Experience amazing performances, food trucks, and a vibrant atmosphere under the stars.",
-  location: "Central Park, New York",
-  start_time: "2025-07-15T18:00:00",
-  end_time: "2025-07-15T23:00:00",
-  is_public: true,
-  organizer: "Music Events Co.",
-  organizer_id: 1,
-  attendee_count: 250,
+interface Event {
+  id: number;
+  title: string;
+  description: string;
+  location: string;
+  start_time: string;
+  end_time: string;
+  is_public: boolean;
+  organizer: string;
+  organizer_id: number;
+  attendee_count: number;
+  user_rsvp: string | null;
+  can_edit: boolean;
+  reviews: Review[];
+}
+
+interface Review {
+  id: number;
+  user: string;
+  user_full_name: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  can_edit: boolean;
+}
+
+const fetchEvent = async (id: string): Promise<Event> => {
+  const response = await api.get(`/events/${id}/`);
+  return response.data;
 };
 
-const mockReviews = [
-  {
-    id: 1,
-    user: "John Doe",
-    rating: 5,
-    comment: "Absolutely amazing event! Great music and wonderful atmosphere.",
-    created_at: "2025-07-16T10:00:00",
-  },
-  {
-    id: 2,
-    user: "Jane Smith",
-    rating: 4,
-    comment: "Had a fantastic time. The organization was top-notch!",
-    created_at: "2025-07-16T14:30:00",
-  },
-];
+const fetchReviews = async (eventId: string): Promise<Review[]> => {
+  const response = await api.get(`/events/${eventId}/reviews/`);
+  return response.data.results || response.data;
+};
 
 export default function EventDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
+  const queryClient = useQueryClient();
+  
   const [rsvpStatus, setRsvpStatus] = useState<string>("not_going");
   const [rating, setRating] = useState<number>(5);
   const [reviewComment, setReviewComment] = useState("");
-  const [isAuthenticated] = useState(false);
-  const [currentUserId] = useState(2);
 
-  const event = mockEvent;
-  const reviews = mockReviews;
-  const isOrganizer = currentUserId === event.organizer_id;
+  const {
+    data: event,
+    isLoading: eventLoading,
+    error: eventError
+  } = useQuery({
+    queryKey: ['event', id],
+    queryFn: () => fetchEvent(id!),
+    enabled: !!id,
+  });
+
+  const {
+    data: reviews = [],
+    isLoading: reviewsLoading
+  } = useQuery({
+    queryKey: ['reviews', id],
+    queryFn: () => fetchReviews(id!),
+    enabled: !!id,
+  });
+
+  const rsvpMutation = useMutation({
+    mutationFn: async (status: string) => {
+      const response = await api.post(`/events/${id}/rsvp/`, { status });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event', id] });
+      toast.success(`RSVP updated to: ${rsvpStatus}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Failed to update RSVP");
+    }
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: async (reviewData: { rating: number, comment: string }) => {
+      const response = await api.post(`/events/${id}/reviews/`, reviewData);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', id] });
+      setReviewComment("");
+      setRating(5);
+      toast.success("Review submitted successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Failed to submit review");
+    }
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/events/${id}/`);
+    },
+    onSuccess: () => {
+      toast.success("Event deleted successfully");
+      navigate("/dashboard");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Failed to delete event");
+    }
+  });
 
   const handleRSVP = () => {
     if (!isAuthenticated) {
@@ -77,7 +143,7 @@ export default function EventDetail() {
       navigate("/login");
       return;
     }
-    toast.success(`RSVP updated to: ${rsvpStatus}`);
+    rsvpMutation.mutate(rsvpStatus);
   };
 
   const handleSubmitReview = () => {
@@ -90,18 +156,55 @@ export default function EventDetail() {
       toast.error("Please write a comment");
       return;
     }
-    toast.success("Review submitted successfully!");
-    setReviewComment("");
+    reviewMutation.mutate({
+      rating,
+      comment: reviewComment,
+    });
   };
 
   const handleDelete = () => {
-    toast.success("Event deleted successfully");
-    navigate("/");
+    if (window.confirm('Are you sure you want to delete this event?')) {
+      deleteEventMutation.mutate();
+    }
   };
+
+  if (eventLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-muted rounded w-1/4"></div>
+            <div className="h-64 bg-muted rounded"></div>
+            <div className="h-32 bg-muted rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (eventError || !event) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 text-center">
+          <h1 className="text-2xl font-bold mb-4">Event Not Found</h1>
+          <p className="text-muted-foreground mb-4">
+            The event you're looking for doesn't exist or has been removed.
+          </p>
+          <Button onClick={() => navigate("/")}>
+            Back to Events
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const isOrganizer = user?.id === event.organizer_id;
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar isAuthenticated={isAuthenticated} />
+      <Navbar />
 
       <div className="container mx-auto px-4 py-8">
         <Button
@@ -109,14 +212,12 @@ export default function EventDetail() {
           onClick={() => navigate(-1)}
           className="mb-6"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Event Header */}
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-4">
                 <h1 className="text-4xl font-bold">{event.title}</h1>
@@ -133,6 +234,7 @@ export default function EventDetail() {
                       variant="destructive"
                       size="icon"
                       onClick={handleDelete}
+                      disabled={deleteEventMutation.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -142,7 +244,6 @@ export default function EventDetail() {
               <p className="text-lg text-muted-foreground">{event.description}</p>
             </div>
 
-            {/* Event Details Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Event Details</CardTitle>
@@ -186,59 +287,72 @@ export default function EventDetail() {
               </CardContent>
             </Card>
 
-            {/* Reviews Section */}
             <div className="space-y-4">
               <h2 className="text-2xl font-bold">Reviews</h2>
 
-              {/* Add Review Form */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Leave a Review</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label>Rating</Label>
-                    <div className="flex items-center gap-2 mt-2">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setRating(i + 1)}
-                          className="transition-transform hover:scale-110"
-                        >
-                          <Star
-                            className={`h-8 w-8 ${
-                              i < rating
-                                ? "fill-accent text-accent"
-                                : "text-muted-foreground"
-                            }`}
-                          />
-                        </button>
-                      ))}
+              {isAuthenticated && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Leave a Review</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label>Rating</Label>
+                      <div className="flex items-center gap-2 mt-2">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setRating(i + 1)}
+                            className="transition-transform hover:scale-110"
+                          >
+                            <Star
+                              className={`h-8 w-8 ${
+                                i < rating
+                                  ? "fill-accent text-accent"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="review">Your Review</Label>
-                    <Textarea
-                      id="review"
-                      placeholder="Share your experience..."
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      rows={4}
-                      className="mt-2"
-                    />
-                  </div>
-                  <Button onClick={handleSubmitReview} className="w-full">
-                    Submit Review
-                  </Button>
-                </CardContent>
-              </Card>
+                    <div>
+                      <Label htmlFor="review">Your Review</Label>
+                      <Textarea
+                        id="review"
+                        placeholder="Share your experience..."
+                        value={reviewComment}
+                        onChange={(e) => setReviewComment(e.target.value)}
+                        rows={4}
+                        className="mt-2"
+                      />
+                    </div>
+                    <Button 
+                      onClick={handleSubmitReview} 
+                      className="w-full"
+                      disabled={reviewMutation.isPending}
+                    >
+                      {reviewMutation.isPending ? "Submitting..." : "Submit Review"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
 
-              {/* Reviews List */}
               <div className="space-y-4">
-                {reviews.map((review) => (
-                  <ReviewCard key={review.id} review={review} />
-                ))}
-                {reviews.length === 0 && (
+                {reviewsLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="animate-pulse space-y-2">
+                        <div className="h-4 bg-muted rounded w-1/4"></div>
+                        <div className="h-16 bg-muted rounded"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : reviews.length > 0 ? (
+                  reviews.map((review) => (
+                    <ReviewCard key={review.id} review={review} />
+                  ))
+                ) : (
                   <p className="text-center text-muted-foreground py-8">
                     No reviews yet. Be the first to review this event!
                   </p>
@@ -247,9 +361,7 @@ export default function EventDetail() {
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
-            {/* RSVP Card */}
             <Card className="sticky top-24">
               <CardHeader>
                 <CardTitle>RSVP to Event</CardTitle>
@@ -268,13 +380,21 @@ export default function EventDetail() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleRSVP} className="w-full" variant="success">
-                  Update RSVP
+                <Button 
+                  onClick={handleRSVP} 
+                  className="w-full"
+                  disabled={rsvpMutation.isPending}
+                >
+                  {rsvpMutation.isPending ? "Updating..." : "Update RSVP"}
                 </Button>
+                {event.user_rsvp && (
+                  <p className="text-sm text-center text-muted-foreground">
+                    Current status: <strong>{event.user_rsvp.replace('_', ' ')}</strong>
+                  </p>
+                )}
               </CardContent>
             </Card>
 
-            {/* Organizer Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Organized By</CardTitle>

@@ -53,7 +53,6 @@ export default function Dashboard() {
     retry: 2,
   });
 
-  // Redirect to login if not authenticated
   if (!isAuthenticated) {
     navigate('/login');
     return null;
@@ -226,4 +225,3 @@ export default function Dashboard() {
     </div>
   );
 }
-  

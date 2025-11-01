@@ -29,7 +29,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', '')
         )
         
-        # Update the profile with full_name
         user.profile.full_name = full_name
         user.profile.save()
         
@@ -48,12 +47,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
         
-        # Update User fields
         for attr, value in user_data.items():
             setattr(instance.user, attr, value)
         instance.user.save()
         
-        # Update UserProfile fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

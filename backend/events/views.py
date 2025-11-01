@@ -32,17 +32,14 @@ class EventListCreateView(generics.ListCreateAPIView):
         queryset = Event.objects.all()
         user = self.request.user
         
-        # Log for debugging
         logger.info(f"User authenticated: {user.is_authenticated}")
         logger.info(f"Total events in database: {queryset.count()}")
         
-        # If user is not authenticated, only show public events
         if not user.is_authenticated:
             public_queryset = queryset.filter(is_public=True)
             logger.info(f"Public events for unauthenticated user: {public_queryset.count()}")
             return public_queryset
         
-        # If user is authenticated, show public events and private events they organize or RSVPed to
         public_events = Q(is_public=True)
         organized_events = Q(organizer=user)
         rsvped_events = Q(rsvps__user=user)
@@ -73,7 +70,6 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_object(self):
         obj = super().get_object()
-        # Add user RSVP status to the object
         if self.request.user.is_authenticated:
             try:
                 rsvp = RSVP.objects.get(event=obj, user=self.request.user)
@@ -93,7 +89,6 @@ class EventRSVPView(generics.GenericAPIView):
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Check if user can access this event
         if not event.is_public:
             if event.organizer != request.user:
                 return Response({'error': 'You cannot RSVP to this private event'}, 
@@ -114,7 +109,6 @@ class EventRSVPView(generics.GenericAPIView):
             rsvp.status = status_value
             rsvp.save()
         
-        # Update event's attendee count if method exists
         if hasattr(event, 'update_attendee_count'):
             event.update_attendee_count()
         
@@ -146,11 +140,9 @@ class EventReviewListCreateView(generics.ListCreateAPIView):
         return Review.objects.filter(event_id=event_id).order_by('-created_at')
     
     def create(self, request, *args, **kwargs):
-        # Get event_id from URL
         event_id = self.kwargs.get('event_id')
         
         try:
-            # Verify event exists
             event = Event.objects.get(id=event_id)
         except Event.DoesNotExist:
             return Response(
@@ -158,31 +150,26 @@ class EventReviewListCreateView(generics.ListCreateAPIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if user is authenticated
         if not request.user.is_authenticated:
             return Response(
                 {'error': 'Authentication required'}, 
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
-        # Check if user already reviewed this event
         if Review.objects.filter(event=event, user=request.user).exists():
             return Response(
                 {'error': 'You have already reviewed this event'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate the serializer with the request data
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        # Save with event and user set
         try:
             review = serializer.save(event=event, user=request.user)
             logger.info(f"Created review for event {event.title} by {request.user.username}")
             
-            # Return the created review data
             return Response(
                 self.get_serializer(review).data, 
                 status=status.HTTP_201_CREATED
@@ -206,16 +193,12 @@ class ReviewDetailView(generics.RetrieveUpdateDestroyAPIView):
 def user_dashboard(request):
     user = request.user
     
-    # Get user's organized events
     organized_events = Event.objects.filter(organizer=user).order_by('-created_at')
     
-    # Get user's RSVPs with related events
     user_rsvps = RSVP.objects.filter(user=user).select_related('event').order_by('-created_at')
     
-    # Get events user RSVPed to (going or maybe)
     rsvped_events = [rsvp.event for rsvp in user_rsvps if rsvp.status in ['going', 'maybe']]
     
-    # Add user_rsvp status to each event
     for event in organized_events:
         try:
             rsvp = user_rsvps.filter(event=event).first()

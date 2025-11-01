@@ -234,7 +234,6 @@ export default function Events() {
           </span>
         </div>
         
-        {/* Debug information - remove in production */}
         
         
         {isLoading ? (

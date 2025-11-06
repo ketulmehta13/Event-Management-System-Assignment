@@ -1,7 +1,8 @@
-Django==5.0.7
-djangorestframework==3.15.2
-djangorestframework-simplejwt==5.3.0
-django-cors-headers==4.3.1
-django-filter==24.2
-Pillow==10.4.0
-setuptools>=69.0.0
+Django>=4.2.0
+djangorestframework
+django-cors-headers
+django-filter
+whitenoise
+gunicorn
+psycopg2-binary
+python-dotenv

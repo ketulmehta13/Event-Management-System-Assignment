@@ -23,10 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-o$538c2(m0k59j%_x#6@&ymq!*cju+6x3)y4ed08&7_69b8(f3')
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*','localhost',
+    '127.0.0.1',
+    '.onrender.com']
 
 INSTALLED_APPS = [
     'django.contrib.admin',

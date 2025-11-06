@@ -26,8 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-o$538c2(m0k59j%_x#6@&ymq!*cju+6x3)y4ed08&7_69b8(f3')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,.vercel.app,.now.sh').split(',')
-# Application definition
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -81,27 +80,12 @@ WSGI_APPLICATION = 'project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if os.environ.get('DATABASE_URL'):
-    # Use production database
-    try:
-        import dj_database_url
-        DATABASES = {'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))}
-    except ImportError:
-        # Fallback to SQLite if dj_database_url is not installed
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-else:
-    # Use SQLite for development
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': '/tmp/db.sqlite3',  # ← Use /tmp for serverless
     }
+}
 
 
 # Password validation
@@ -140,7 +124,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = '/tmp/staticfiles'
 
 # Only create staticfiles_dirs if the static directory exists
 STATICFILES_DIRS = []
@@ -202,7 +186,8 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
-
+DEBUG=False
+DJANGO_SETTINGS_MODULE=project.settings
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",

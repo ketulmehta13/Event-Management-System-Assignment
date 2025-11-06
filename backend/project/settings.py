@@ -186,15 +186,17 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
-DEBUG=False
-DJANGO_SETTINGS_MODULE=project.settings
+
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3000", 
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://event-management-system-fo96z8cdk-ketuls-projects.vercel.app",
+    # Add your backend URL to allow self-requests
+    "https://event-management-systems-crk66s39d-ketuls-projects.vercel.app",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True 

@@ -14,22 +14,24 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-
+# Environment / secrets
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-o$538c2(m0k59j%_x#6@&ymq!*cju+6x3)y4ed08&7_69b8(f3')
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-o$538c2(m0k59j%_x#6@&ymq!*cju+6x3)y4ed08&7_69b8(f3'
+)
 
-ALLOWED_HOSTS = ['*','localhost',
+ALLOWED_HOSTS = [
+    '*',
+    'localhost',
     '127.0.0.1',
-    '.onrender.com']
+    '.onrender.com',
+]
 
+# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -37,12 +39,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     'django_filters',
-    
+
     'accounts',
     'events',
 ]
@@ -79,13 +81,19 @@ TEMPLATES = [
 WSGI_APPLICATION = 'project.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# -------------------------
+# Database (sqlite3 - project-local)
+# -------------------------
+# Use a DB file inside the project BASE_DIR (works on Windows and Linux)
+DB_PATH = BASE_DIR / "db.sqlite3"
+# Ensure parent directory exists (BASE_DIR exists already)
+os.makedirs(os.path.dirname(str(DB_PATH)), exist_ok=True)
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': '/tmp/db.sqlite3',  # ← Use /tmp for serverless
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        # convert Path to str for widest compatibility
+        "NAME": str(DB_PATH),
     }
 }
 
@@ -122,17 +130,17 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-# Static files (CSS, JavaScript, Images)
+# Use project-local static root instead of /tmp
 STATIC_URL = '/static/'
-STATIC_ROOT = '/tmp/staticfiles'
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# ensure staticfiles dir exists
+os.makedirs(str(STATIC_ROOT), exist_ok=True)
 
-# Only create staticfiles_dirs if the static directory exists
+# Only create STATICFILES_DIRS if the static directory exists
 STATICFILES_DIRS = []
 static_dir = BASE_DIR / "static"
 if static_dir.exists():
-    STATICFILES_DIRS = [static_dir]
+    STATICFILES_DIRS = [str(static_dir)]
 
 # Whitenoise configuration
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -140,9 +148,12 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# ensure media dir exists
+os.makedirs(str(MEDIA_ROOT), exist_ok=True)
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 
 # REST Framework configuration
 REST_FRAMEWORK = {
@@ -155,6 +166,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
 }
+
 
 # JWT Settings
 SIMPLE_JWT = {
@@ -189,18 +201,19 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000", 
+    "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://event-management-system-fo96z8cdk-ketuls-projects.vercel.app",
-    # Add your backend URL to allow self-requests
     "https://event-management-systems-crk66s39d-ketuls-projects.vercel.app",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True 
+# If you intentionally want to allow everything in development, keep this True.
+# For production you should restrict origins and set CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOW_CREDENTIALS = True

@@ -1,73 +1,95 @@
-# Welcome to your Lovable project
+# PR: PYTHONIIP01010.md
 
-## Project info
+# **Event Management System - Assignment**
 
-**URL**: https://lovable.dev/projects/5698a8dc-c62e-465d-a345-539cddf7924c
+## **Overview**
 
-## How can I edit this code?
+This assignment focuses on building an **Event Management API** using Django and Django REST Framework (DRF). The API will allow users to create events, RSVP, and leave reviews. This assignment tests your understanding of key DRF and Django concepts like serializers, viewsets, permissions, and authentication.
 
-There are several ways of editing your application.
+### **Objective**
 
-**Use Lovable**
+Demonstrate your ability to build RESTful APIs using Django REST Framework, manage relationships between models, and implement authentication, permissions, and validations.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/5698a8dc-c62e-465d-a345-539cddf7924c) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## **Assignment Requirements**
 
-**Use your preferred IDE**
+### 1. **Models**:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **UserProfile**: Extends Django’s built-in `User` model with fields such as `full_name`, `bio`, `location`, and `profile_picture`.
+- **Event**: Contains `title`, `description`, `organizer`, `location`, `start_time`, `end_time`, `is_public` (Boolean), `created_at`, and `updated_at`.
+- **RSVP**: Handles user RSVPs for events with fields like `event`, `user`, and `status` ('Going', 'Maybe', 'Not Going').
+- **Review**: Allows users to leave a review for an event with fields like `event`, `user`, `rating`, and `comment`.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 2. **API Endpoints**:
 
-Follow these steps:
+- **Event API**:
+  - `POST /events/`: Create a new event (authenticated users only).
+  - `GET /events/`: List all public events (with pagination).
+  - `GET /events/{id}/`: Get details of a specific event.
+  - `PUT /events/{id}/`: Update an event (only the organizer can edit).
+  - `DELETE /events/{id}/`: Delete an event (only the organizer).
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- **RSVP API**:
+  - `POST /events/{event_id}/rsvp/`: RSVP to an event.
+  - `PATCH /events/{event_id}/rsvp/{user_id}/`: Update RSVP status.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+- **Review API**:
+  - `POST /events/{event_id}/reviews/`: Add a review for an event.
+  - `GET /events/{event_id}/reviews/`: List all reviews for an event.
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 3. **Core Features**:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+- **Custom Permissions**:
+  - Only the organizer of an event can edit or delete it.
+  - Implement a permission to restrict access to private events to invited users only.
 
-**Edit a file directly in GitHub**
+- **Pagination, Filtering & Search(optional) try if you can**:
+  - Paginate the event and review listings.
+  - Implement search and filter functionality for events (by `title`, `location`, or `organizer`).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 4. **Authentication & Security**:
 
-**Use GitHub Codespaces**
+- Use **JWT Authentication** for securing all API endpoints.
+- Ensure private events are only visible to invited users (use permissions).
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## **Submission Guidelines**
 
-This project is built with:
+1. Fork the provided repository and complete the assignment.
+2. Commit your changes regularly with clear commit messages.
+3. Add a `README.md` file with setup instructions.
+4. Submit the GitHub repository link once you’ve completed the project.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## **Evaluation Criteria**
 
-Simply open [Lovable](https://lovable.dev/projects/5698a8dc-c62e-465d-a345-539cddf7924c) and click on Share -> Publish.
+### **1. Django REST Framework Proficiency**:
+   - Effective use of serializers, viewsets, and routing.
+   - Managing relationships between models (Events, RSVPs, Reviews).
 
-## Can I connect a custom domain to my Lovable project?
+### **2. Core Python Concepts**:
+   - Object-oriented programming: proper use of classes and methods.
+   - Handling exceptions and edge cases.
 
-Yes, you can!
+### **3. Code Quality**:
+   - Clean, maintainable code.
+   - Proper use of Django and DRF conventions.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### **4. Authentication & Permissions**:
+   - Correct implementation of JWT authentication.
+   - Appropriate permissions for actions like editing/deleting events.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### **5. Bonus point**:
+   - if you can write unit test for testing
+   - if you can implement asynchronous task using celery for email updates of event
+
+---
+
+## **Good Luck!**
+
+This assignment is designed to test your understanding of Django REST Framework and core Python concepts. Be sure to implement all required features and submit a working API.
+
+---
